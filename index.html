@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>超级玛丽 · 效率计时器</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow-x:hidden}
+body{
+  font-family:'Press Start 2P','Microsoft YaHei','微软雅黑',monospace;
+  background:#5C94FC;
+  color:#fff;
+  min-height:100vh;
+  position:relative;
+  -webkit-font-smoothing:none;
+  image-rendering:pixelated;
+}
+.sky-bg{
+  position:fixed;inset:0;z-index:-1;
+  background:linear-gradient(180deg,#5C94FC 0%,#4890e8 60%,#3a7bd5 100%);
+  animation:sky-shift 12s ease-in-out infinite;
+}
+.star{position:absolute;width:4px;height:4px;background:#fff;z-index:-1;image-rendering:pixelated;animation:twinkle var(--ts,3s) ease-in-out infinite;animation-delay:var(--td,0s)}
+.star::before{content:'';position:absolute;top:-2px;left:2px;width:4px;height:4px;background:#fff;opacity:.4}
+@keyframes twinkle{0%,100%{opacity:1}50%{opacity:.2}}
+@keyframes sky-shift{
+  0%{background:linear-gradient(180deg,#5C94FC 0%,#4890e8 60%,#3a7bd5 100%)}
+  50%{background:linear-gradient(180deg,#72B0FF 0%,#5EA8F8 60%,#5098EC 100%)}
+  100%{background:linear-gradient(180deg,#5C94FC 0%,#4890e8 60%,#3a7bd5 100%)}
+}
+.cloud{
+  position:absolute;background:#fff;border-radius:50%;
+  z-index:0;
+}
+.cloud::before,.cloud::after{
+  content:'';position:absolute;background:#fff;border-radius:50%;
+}
+.cloud-1{width:120px;height:48px;top:8%;left:10%;animation:drift1 18s ease-in-out infinite;}
+.cloud-1::before{width:60px;height:60px;top:-28px;left:14px;}
+.cloud-1::after{width:80px;height:40px;top:-10px;left:50px;}
+.cloud-2{width:100px;height:40px;top:14%;right:15%;animation:drift2 15s ease-in-out infinite;animation-delay:-5s;}
+.cloud-2::before{width:50px;height:50px;top:-24px;left:10px;}
+.cloud-2::after{width:64px;height:32px;top:-6px;left:42px;}
+.cloud-3{width:140px;height:52px;top:6%;left:50%;animation:drift3 22s ease-in-out infinite;animation-delay:-10s;}
+.cloud-3::before{width:68px;height:68px;top:-32px;left:20px;}
+.cloud-3::after{width:90px;height:44px;top:-12px;left:60px;}
+@keyframes drift1{
+  0%,100%{transform:translateX(0)}
+  50%{transform:translateX(120px)}
+}
+@keyframes drift2{
+  0%,100%{transform:translateX(0)}
+  50%{transform:translateX(-90px)}
+}
+@keyframes drift3{
+  0%,100%{transform:translateX(60px)}
+  50%{transform:translateX(-40px)}
+}
+.hill{
+  position:absolute;bottom:0;background:#00A800;
+  border-radius:50% 50% 0 0;
+  z-index:0;
+}
+.hill-1{width:300px;height:120px;left:-40px;bottom:0;animation:hill-breathe 8s ease-in-out infinite;}
+.hill-2{width:400px;height:160px;left:50%;transform:translateX(-50%);bottom:0;animation:hill-breathe 8s ease-in-out infinite;animation-delay:-4s;}
+.hill-3{width:260px;height:100px;right:-30px;bottom:0;animation:hill-breathe-3 8s ease-in-out infinite;animation-delay:-2s;}
+@keyframes hill-breathe-3{
+  0%,100%{transform:scaleY(1)}
+  50%{transform:scaleY(1.03)}
+}
+@keyframes hill-breathe{
+  0%,100%{transform:translateX(-50%) scaleY(1)}
+  50%{transform:translateX(-50%) scaleY(1.03)}
+}
+.hill-1{animation:hill-breathe-1 8s ease-in-out infinite;}
+@keyframes hill-breathe-1{
+  0%,100%{transform:scaleY(1)}
+  50%{transform:scaleY(1.03)}
+}
+.ground{
+  position:fixed;bottom:0;left:0;right:0;height:32px;
+  background:linear-gradient(0deg,#8B4513 0%,#C84C0C 40%,#00A800 40%,#4CAF50 100%);
+  z-index:0;
+}
+.level-stage{
+  position:fixed;
+  left:0;
+  right:0;
+  bottom:32px;
+  height:310px;
+  z-index:0;
+  pointer-events:none;
+  overflow:hidden;
+}
+.level-track{
+  position:absolute;
+  left:0;
+  right:0;
+  bottom:0;
+  height:100%;
+  animation:level-pan 22s linear infinite;
+  transform:translate3d(0,0,0);
+  will-change:transform;
+}
+.level-stage::before{
+  content:'';
+  position:absolute;
+  left:0;
+  right:0;
+  bottom:0;
+  height:28px;
+  background:
+    linear-gradient(90deg,rgba(61,28,8,.22) 0 3px,transparent 3px 32px),
+    linear-gradient(0deg,#A64B12 0 48%,#C84C0C 48% 52%,#D96F21 52% 100%);
+  background-size:32px 100%,100% 100%;
+  border-top:4px solid #00A800;
+}
+.pixel-block,.mini-enemy{
+  position:absolute;
+  image-rendering:pixelated;
+}
+.pixel-block{
+  width:64px;
+  height:52px;
+  background:
+    linear-gradient(90deg,transparent 0 29px,#8B4513 29px 33px,transparent 33px),
+    linear-gradient(0deg,transparent 0 23px,#8B4513 23px 27px,transparent 27px),
+    linear-gradient(135deg,#E57A25 0 50%,#C84C0C 50%);
+  border:4px solid #6B3410;
+  box-shadow:
+    inset 4px 4px 0 #F8A830,
+    inset -4px -4px 0 #8B4513,
+    0 6px 0 rgba(0,0,0,.22);
+  transform:translate3d(0,0,0);
+  will-change:transform;
+}
+.pixel-block.question{
+  background:
+    radial-gradient(circle at 11px 10px,#F8E08B 0 3px,transparent 4px),
+    radial-gradient(circle at 53px 10px,#8B4513 0 3px,transparent 4px),
+    radial-gradient(circle at 11px 42px,#8B4513 0 3px,transparent 4px),
+    radial-gradient(circle at 53px 42px,#8B4513 0 3px,transparent 4px),
+    linear-gradient(135deg,#FFD84A 0 48%,#FFB800 48% 100%);
+  border-color:#8B4513;
+}
+.pixel-block.question::after{
+  content:'?';
+  position:absolute;
+  inset:0;
+  color:#8B4513;
+  font-size:26px;
+  line-height:45px;
+  text-align:center;
+  text-shadow:2px 2px 0 #F8E08B;
+}
+.block-a{left:18%;bottom:112px;animation:block-hit-a 3.2s ease-in-out infinite}
+.block-b{left:38%;bottom:148px;animation:block-hit-b 3.2s ease-in-out infinite}
+.block-c{left:58%;bottom:114px;animation:block-hit-c 3.2s ease-in-out infinite}
+.block-d{left:78%;bottom:152px;animation:block-hit-d 3.2s ease-in-out infinite}
+.block-e{left:98%;bottom:130px;animation:block-hit-e 3.2s ease-in-out infinite}
+.block-f{left:113%;bottom:146px;animation:block-hit-f 3.2s ease-in-out infinite}
+.mini-enemy{
+  width:42px;
+  height:26px;
+  left:66%;
+  bottom:24px;
+  background:#8B4513;
+  border:4px solid #3d1c08;
+  border-radius:13px 13px 4px 4px;
+  animation:enemy-waddle 1.8s ease-in-out infinite;
+  transform:translate3d(0,0,0);
+  will-change:transform;
+}
+.mini-enemy::before,.mini-enemy::after{
+  content:'';
+  position:absolute;
+  top:7px;
+  width:5px;
+  height:5px;
+  background:#fff;
+}
+.mini-enemy::before{left:10px}
+.mini-enemy::after{right:10px}
+.claude-runner{
+  --runner-size:5px;
+  position:absolute;
+  left:calc(18% + 32px);
+  bottom:28px;
+  width:calc(var(--runner-size) * 16);
+  height:calc(var(--runner-size) * 10);
+  font-size:var(--runner-size);
+  line-height:1;
+  transform-origin:50% 100%;
+  animation:runner-quest 3.2s linear infinite;
+  filter:drop-shadow(0 8px 0 rgba(0,0,0,.16));
+  transform:translate3d(-50%,0,0);
+  will-change:transform;
+}
+.claude-runner::before{
+  content:'';
+  position:absolute;
+  left:0;
+  top:0;
+  width:var(--runner-size);
+  height:var(--runner-size);
+  background:#DE684D;
+  --runner-stand:
+    2em 0 #DE684D,3em 0 #DE684D,4em 0 #DE684D,5em 0 #DE684D,6em 0 #DE684D,7em 0 #DE684D,8em 0 #DE684D,9em 0 #DE684D,10em 0 #DE684D,11em 0 #DE684D,12em 0 #DE684D,
+    2em 1em #DE684D,3em 1em #DE684D,4em 1em #DE684D,5em 1em #DE684D,6em 1em #DE684D,7em 1em #DE684D,8em 1em #DE684D,9em 1em #DE684D,10em 1em #DE684D,11em 1em #DE684D,12em 1em #DE684D,
+    2em 2em #DE684D,3em 2em #DE684D,4em 2em #000,5em 2em #DE684D,6em 2em #DE684D,7em 2em #DE684D,8em 2em #DE684D,9em 2em #DE684D,10em 2em #DE684D,11em 2em #000,12em 2em #DE684D,
+    2em 3em #DE684D,3em 3em #DE684D,4em 3em #000,5em 3em #DE684D,6em 3em #DE684D,7em 3em #DE684D,8em 3em #DE684D,9em 3em #DE684D,10em 3em #DE684D,11em 3em #000,12em 3em #DE684D,
+    0 4em #DE684D,1em 4em #DE684D,2em 4em #DE684D,3em 4em #DE684D,4em 4em #DE684D,5em 4em #DE684D,6em 4em #DE684D,7em 4em #DE684D,8em 4em #DE684D,9em 4em #DE684D,10em 4em #DE684D,11em 4em #DE684D,12em 4em #DE684D,13em 4em #DE684D,14em 4em #DE684D,
+    0 5em #DE684D,1em 5em #DE684D,2em 5em #DE684D,3em 5em #DE684D,4em 5em #DE684D,5em 5em #DE684D,6em 5em #DE684D,7em 5em #DE684D,8em 5em #DE684D,9em 5em #DE684D,10em 5em #DE684D,11em 5em #DE684D,12em 5em #DE684D,13em 5em #DE684D,14em 5em #DE684D,
+    2em 6em #DE684D,3em 6em #DE684D,4em 6em #DE684D,5em 6em #DE684D,6em 6em #DE684D,7em 6em #DE684D,8em 6em #DE684D,9em 6em #DE684D,10em 6em #DE684D,11em 6em #DE684D,12em 6em #DE684D,
+    3em 7em #DE684D,4em 7em #DE684D,5em 7em #DE684D,6em 7em #DE684D,7em 7em #DE684D,8em 7em #DE684D,9em 7em #DE684D,10em 7em #DE684D,11em 7em #DE684D,
+    3em 8em #DE684D,4em 8em #DE684D,6em 8em #DE684D,7em 8em #DE684D,10em 8em #DE684D,11em 8em #DE684D,
+    3em 9em #DE684D,4em 9em #DE684D,6em 9em #DE684D,7em 9em #DE684D,10em 9em #DE684D,11em 9em #DE684D;
+  --runner-tuck:
+    2em 0 #DE684D,3em 0 #DE684D,4em 0 #DE684D,5em 0 #DE684D,6em 0 #DE684D,7em 0 #DE684D,8em 0 #DE684D,9em 0 #DE684D,10em 0 #DE684D,11em 0 #DE684D,12em 0 #DE684D,
+    2em 1em #DE684D,3em 1em #DE684D,4em 1em #DE684D,5em 1em #DE684D,6em 1em #DE684D,7em 1em #DE684D,8em 1em #DE684D,9em 1em #DE684D,10em 1em #DE684D,11em 1em #DE684D,12em 1em #DE684D,
+    2em 2em #DE684D,3em 2em #DE684D,4em 2em #000,5em 2em #DE684D,6em 2em #DE684D,7em 2em #DE684D,8em 2em #DE684D,9em 2em #DE684D,10em 2em #DE684D,11em 2em #000,12em 2em #DE684D,
+    2em 3em #DE684D,3em 3em #DE684D,4em 3em #000,5em 3em #DE684D,6em 3em #DE684D,7em 3em #DE684D,8em 3em #DE684D,9em 3em #DE684D,10em 3em #DE684D,11em 3em #000,12em 3em #DE684D,
+    2em 4em #DE684D,3em 4em #DE684D,4em 4em #DE684D,5em 4em #DE684D,6em 4em #DE684D,7em 4em #DE684D,8em 4em #DE684D,9em 4em #DE684D,10em 4em #DE684D,11em 4em #DE684D,12em 4em #DE684D,
+    1em 5em #DE684D,2em 5em #DE684D,3em 5em #DE684D,4em 5em #DE684D,5em 5em #DE684D,6em 5em #DE684D,7em 5em #DE684D,8em 5em #DE684D,9em 5em #DE684D,10em 5em #DE684D,11em 5em #DE684D,12em 5em #DE684D,13em 5em #DE684D,
+    2em 6em #DE684D,3em 6em #DE684D,4em 6em #DE684D,5em 6em #DE684D,6em 6em #DE684D,7em 6em #DE684D,8em 6em #DE684D,9em 6em #DE684D,10em 6em #DE684D,11em 6em #DE684D,12em 6em #DE684D,
+    3em 7em #DE684D,4em 7em #DE684D,5em 7em #DE684D,6em 7em #DE684D,7em 7em #DE684D,8em 7em #DE684D,9em 7em #DE684D,10em 7em #DE684D,11em 7em #DE684D,
+    4em 8em #DE684D,5em 8em #DE684D,7em 8em #DE684D,8em 8em #DE684D,9em 8em #DE684D,10em 8em #DE684D,
+    4em 9em #DE684D,5em 9em #DE684D,9em 9em #DE684D,10em 9em #DE684D;
+  box-shadow:var(--runner-stand);
+  animation:runner-tuck 3.2s steps(1,end) infinite;
+}
+.claude-runner::after{display:none}
+body.timer-running .level-track{animation-duration:10s}
+body.timer-running .claude-runner{animation-duration:2.65s}
+body.timer-running .claude-runner::before{animation-duration:2.65s}
+body.timer-running .pixel-block{animation-duration:2.65s}
+body.timer-paused .level-track,
+body.timer-paused .claude-runner,
+body.timer-paused .claude-runner::before,
+body.timer-paused .claude-runner::after,
+body.timer-paused .pixel-block,
+body.timer-paused .mini-enemy{animation-play-state:paused}
+body.timer-idle .claude-runner{animation-duration:3.8s}
+body.timer-idle .claude-runner::before{animation-duration:3.8s}
+body.timer-idle .pixel-block{animation-duration:3.8s}
+@keyframes level-pan{
+  0%{transform:translateX(0)}
+  100%{transform:translateX(-24%)}
+}
+@keyframes enemy-waddle{
+  0%,100%{transform:translateX(0)}
+  50%{transform:translateX(-16px)}
+}
+@keyframes runner-tuck{
+  0%,5%,13%,19%,29%,35%,45%,51%,61%,67%,77%,83%,93%,100%{box-shadow:var(--runner-stand)}
+  6%,12%,20%,28%,36%,44%,52%,60%,68%,76%,84%,92%{box-shadow:var(--runner-tuck)}
+}
+@keyframes block-hit-a{
+  0%,6%,11%,100%{transform:translate3d(0,0,0)}
+  8%{transform:translate3d(0,-11px,0)}
+  9.5%{transform:translate3d(-3px,-7px,0)}
+  11%{transform:translate3d(3px,-3px,0)}
+}
+@keyframes block-hit-b{
+  0%,22%,27%,100%{transform:translate3d(0,0,0)}
+  24%{transform:translate3d(0,-11px,0)}
+  25.5%{transform:translate3d(-3px,-7px,0)}
+  27%{transform:translate3d(3px,-3px,0)}
+}
+@keyframes block-hit-c{
+  0%,38%,43%,100%{transform:translate3d(0,0,0)}
+  40%{transform:translate3d(0,-11px,0)}
+  41.5%{transform:translate3d(-3px,-7px,0)}
+  43%{transform:translate3d(3px,-3px,0)}
+}
+@keyframes block-hit-d{
+  0%,54%,59%,100%{transform:translate3d(0,0,0)}
+  56%{transform:translate3d(0,-11px,0)}
+  57.5%{transform:translate3d(-3px,-7px,0)}
+  59%{transform:translate3d(3px,-3px,0)}
+}
+@keyframes block-hit-e{
+  0%,70%,75%,100%{transform:translate3d(0,0,0)}
+  72%{transform:translate3d(0,-11px,0)}
+  73.5%{transform:translate3d(-3px,-7px,0)}
+  75%{transform:translate3d(3px,-3px,0)}
+}
+@keyframes block-hit-f{
+  0%,86%,91%,100%{transform:translate3d(0,0,0)}
+  88%{transform:translate3d(0,-11px,0)}
+  89.5%{transform:translate3d(-3px,-7px,0)}
+  91%{transform:translate3d(3px,-3px,0)}
+}
+@keyframes runner-quest{
+  0%{transform:translate3d(calc(-50% - 14vw),0,0)}
+  4%{transform:translate3d(-50%,0,0)}
+  8%{transform:translate3d(-50%,-34px,0)}
+  13%{transform:translate3d(-50%,0,0)}
+  16%{transform:translate3d(calc(-50% + 14vw),0,0)}
+  20%{transform:translate3d(calc(-50% + 20vw),0,0)}
+  24%{transform:translate3d(calc(-50% + 20vw),-70px,0)}
+  28%{transform:translate3d(calc(-50% + 20vw),0,0)}
+  32%{transform:translate3d(calc(-50% + 34vw),0,0)}
+  36%{transform:translate3d(calc(-50% + 40vw),0,0)}
+  40%{transform:translate3d(calc(-50% + 40vw),-36px,0)}
+  44%{transform:translate3d(calc(-50% + 40vw),0,0)}
+  48%{transform:translate3d(calc(-50% + 54vw),0,0)}
+  52%{transform:translate3d(calc(-50% + 60vw),0,0)}
+  56%{transform:translate3d(calc(-50% + 60vw),-74px,0)}
+  60%{transform:translate3d(calc(-50% + 60vw),0,0)}
+  64%{transform:translate3d(calc(-50% + 74vw),0,0)}
+  68%{transform:translate3d(calc(-50% + 80vw),0,0)}
+  72%{transform:translate3d(calc(-50% + 80vw),-52px,0)}
+  76%{transform:translate3d(calc(-50% + 80vw),0,0)}
+  80%{transform:translate3d(calc(-50% + 89vw),0,0)}
+  84%{transform:translate3d(calc(-50% + 95vw),0,0)}
+  88%{transform:translate3d(calc(-50% + 95vw),-68px,0)}
+  92%{transform:translate3d(calc(-50% + 95vw),0,0)}
+  96%{transform:translate3d(calc(-50% + 105vw),0,0)}
+  100%{transform:translate3d(calc(-50% + 120vw),0,0)}
+}
+.container{
+  position:relative;z-index:1;
+  max-width:640px;margin:0 auto;padding:20px 16px 60px;
+  display:flex;flex-direction:column;gap:20px;
+}
+.sound-toggle{
+  position:fixed;top:16px;right:16px;z-index:100;
+  width:44px;height:44px;border:3px solid #C84C0C;
+  background:#FFB800;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  font-size:24px;transition:transform .1s;
+  image-rendering:pixelated;
+}
+.sound-toggle:hover{transform:scale(1.1)}
+.sound-toggle:active{transform:scale(.95)}
+.brick-card{
+  background:#C84C0C;
+  border:4px solid #8B4513;
+  padding:20px;
+  box-shadow:inset 0 0 0 2px #F8A830, 0 6px 0 #6B3410;
+  position:relative;
+}
+.brick-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:4px;
+  background:rgba(255,255,255,.15);
+}
+.overview-empty{
+  text-align:center;padding:16px;
+  background:#C84C0C;border:4px solid #8B4513;
+  box-shadow:inset 0 0 0 2px #F8A830, 0 6px 0 #6B3410;
+}
+.overview-empty .question-block{
+  display:inline-block;width:48px;height:48px;
+  background:#FFB800;border:3px solid #8B4513;
+  color:#8B4513;font-size:28px;line-height:54px;
+  margin-bottom:8px;
+  animation:bounce 1s infinite;
+}
+@keyframes bounce{
+  0%,100%{transform:translateY(0)}
+  50%{transform:translateY(-8px)}
+}
+.overview-stats{
+  display:flex;justify-content:space-around;flex-wrap:wrap;gap:12px;
+  margin-bottom:16px;
+}
+.stat-item{text-align:center;}
+.stat-label{font-size:11px;color:rgba(255,255,255,.7);margin-bottom:4px}
+.stat-value{font-size:22px;color:#FFB800;text-shadow:2px 2px 0 #6B3410;}
+.tag-bars{margin-top:12px}
+.tag-bar-row{
+  display:flex;align-items:center;gap:10px;margin-bottom:8px;
+  font-size:10px;
+}
+.tag-bar-name{width:50px;text-align:right;flex-shrink:0;color:#fff}
+.tag-bar-track{
+  flex:1;height:12px;background:#6B3410;border:2px solid #8B4513;
+  position:relative;overflow:hidden;
+}
+.tag-bar-fill{
+  height:100%;background:repeating-linear-gradient(90deg,#FFB800 0px,#FFB800 8px,#F8A830 8px,#F8A830 16px);
+  transition:width .3s;
+}
+.tag-bar-time{width:80px;flex-shrink:0;color:#FFB800}
+.efficiency-badge{
+  font-size:13px;color:#FFB800;text-align:center;
+}
+.timer-display{
+  text-align:center;
+  background:#6B3410;border:4px solid #8B4513;
+  padding:24px 16px;
+  box-shadow:inset 0 0 0 2px #C84C0C;
+  position:relative;
+}
+.timer-display .time{
+  font-size:36px;color:#FFB800;
+  text-shadow:4px 4px 0 #3d1c08;
+  letter-spacing:4px;
+}
+.status-dot{
+  display:inline-block;width:10px;height:10px;margin-right:4px;
+  vertical-align:middle;position:relative;top:-1px;
+}
+.status-dot.running{background:#00FF00;box-shadow:0 0 6px #00FF00;animation:pulse .8s infinite}
+.status-dot.paused{background:#FFB800;box-shadow:0 0 6px #FFB800;}
+.status-dot.idle{background:#AAA;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.timer-label{
+  font-size:11px;color:rgba(255,255,255,.6);margin-top:8px;
+}
+.btn-row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.btn{
+  font-family:'Press Start 2P','Microsoft YaHei','微软雅黑',monospace;
+  font-size:13px;border:none;cursor:pointer;
+  padding:16px 28px;text-transform:uppercase;
+  position:relative;transition:transform .08s;
+  image-rendering:pixelated;
+}
+.btn:active{transform:scale(.92)}
+.btn.shake{animation:shake .3s ease}
+@keyframes shake{
+  0%,100%{transform:translateX(0)}
+  10%,50%,90%{transform:translateX(-5px)}
+  30%,70%{transform:translateX(5px)}
+}
+.btn-start{
+  background:#E4000F;color:#fff;
+  border:3px solid #8B0000;
+  box-shadow:0 6px 0 #8B0000;
+}
+.btn-start:hover{background:#FF1A2E}
+.btn-pause{
+  background:#00A800;color:#fff;
+  border:3px solid #006400;
+  box-shadow:0 6px 0 #006400;
+}
+.btn-pause:hover{background:#00C800}
+.btn-stop{
+  background:#5C94FC;color:#fff;
+  border:3px solid #1a3a6a;
+  box-shadow:0 6px 0 #1a3a6a;
+}
+.btn-stop:hover{background:#7AAEFC}
+.btn-confirm{
+  background:#00A800;color:#fff;
+  border:3px solid #006400;
+  box-shadow:0 6px 0 #006400;
+  padding:12px 32px;
+}
+.btn-confirm:hover{background:#00C800}
+.btn-cancel{
+  background:#C84C0C;color:#fff;
+  border:3px solid #6B3410;
+  box-shadow:0 6px 0 #6B3410;
+  padding:12px 32px;
+}
+.btn-cancel:hover{background:#E06020}
+.btn-export{
+  background:#FFB800;color:#6B3410;
+  border:3px solid #8B4513;
+  box-shadow:0 6px 0 #8B4513;
+  padding:14px 24px;font-size:11px;
+}
+.btn-export:hover{background:#FFC830}
+.btn-edit,.btn-delete{
+  font-family:'Press Start 2P','Microsoft YaHei','微软雅黑',monospace;
+  font-size:9px;padding:6px 10px;cursor:pointer;border:2px solid;
+  transition:transform .08s;
+}
+.btn-edit{background:#FFB800;border-color:#8B4513;color:#6B3410}
+.btn-delete{background:#E4000F;border-color:#8B0000;color:#fff}
+.btn-edit:hover,.btn-delete:hover{transform:scale(1.1)}
+.eff-btns{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:8px 0}
+.eff-btn{
+  font-family:'Press Start 2P','Microsoft YaHei','微软雅黑',monospace;
+  font-size:12px;padding:12px 18px;cursor:pointer;
+  background:#FFB800;color:#6B3410;
+  border:3px solid #8B4513;
+  box-shadow:0 4px 0 #8B4513;
+  transition:transform .08s;
+}
+.eff-btn:hover{background:#FFC830}
+.eff-btn:active{transform:scale(.92)}
+.eff-btn.active{background:#E4000F;color:#fff;border-color:#8B0000;box-shadow:0 4px 0 #8B0000}
+.tag-btns{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin:8px 0}
+.tag-btn{
+  font-family:'Press Start 2P','Microsoft YaHei','微软雅黑',monospace;
+  font-size:10px;padding:8px 14px;cursor:pointer;
+  background:#5C94FC;color:#fff;
+  border:2px solid #3a6ab0;
+}
+.tag-btn:hover{background:#7AAEFC}
+.tag-btn.active{background:#FFB800;color:#6B3410;border-color:#8B4513}
+.modal-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.7);
+  display:flex;align-items:center;justify-content:center;
+  z-index:200;padding:16px;
+}
+.modal-overlay.hidden{display:none}
+.modal{
+  background:#C84C0C;
+  border:4px solid #8B4513;
+  padding:24px;max-width:420px;width:100%;
+  box-shadow:inset 0 0 0 2px #F8A830, 0 8px 0 #6B3410, 0 12px 32px rgba(0,0,0,.5);
+}
+.modal h3{
+  font-size:14px;text-align:center;margin-bottom:18px;color:#FFB800;
+  text-shadow:2px 2px 0 #6B3410;
+}
+.pipe-input{
+  font-family:'Press Start 2P','Microsoft YaHei','微软雅黑',monospace;
+  font-size:11px;padding:12px 14px;width:100%;
+  background:#1a3a6a;color:#FFB800;
+  border:4px solid #00A800;
+  outline:none;
+}
+.pipe-input:focus{border-color:#FFB800}
+.pipe-input::placeholder{color:rgba(255,255,255,.3);font-size:10px}
+.eff-slider-row{display:flex;align-items:center;gap:12px;margin:12px 0}
+.eff-slider-row input[type=range]{
+  flex:1;-webkit-appearance:none;height:12px;
+  background:#6B3410;border:2px solid #8B4513;
+  image-rendering:pixelated;
+}
+.eff-slider-row input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:24px;height:24px;
+  background:#FFB800;border:2px solid #8B4513;cursor:pointer;
+}
+.eff-slider-val{font-size:13px;color:#FFB800;min-width:42px;text-align:center}
+.preview-text{font-size:10px;text-align:center;color:#fff;margin:10px 0}
+.preview-text span{color:#FFB800}
+.history-section{margin-top:4px}
+.history-header{
+  display:flex;justify-content:space-between;align-items:center;
+  margin-bottom:12px;flex-wrap:wrap;gap:8px;
+}
+.history-header h3{
+  font-size:13px;color:#FFB800;text-shadow:2px 2px 0 #6B3410;
+}
+.record-list{display:flex;flex-direction:column;gap:8px}
+.record-item{
+  background:#C84C0C;border:3px solid #8B4513;
+  padding:14px;font-size:10px;
+  box-shadow:inset 0 0 0 1px #F8A830;
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+}
+.record-time{color:#FFB800;min-width:70px}
+.record-tag{
+  background:#5C94FC;padding:4px 10px;border:2px solid #3a6ab0;
+  font-size:9px;color:#fff;
+}
+.record-tag.empty{background:transparent;border:2px dashed #8B4513;color:#8B4513}
+.record-raw{color:rgba(255,255,255,.6);font-size:9px}
+.record-eff{color:#FFB800;font-size:9px}
+.record-actions{margin-left:auto;display:flex;gap:4px}
+.history-empty{text-align:center;color:rgba(255,255,255,.5);font-size:10px;padding:16px}
+.shortcut-hint{
+  text-align:center;font-size:9px;color:rgba(255,255,255,.4);
+  padding:14px 0;
+}
+.shortcut-hint kbd{
+  background:#6B3410;border:2px solid #8B4513;
+  padding:3px 8px;font-family:'Press Start 2P','Microsoft YaHei','微软雅黑',monospace;
+  font-size:9px;color:#FFB800;
+}
+.confirm-btns{display:flex;gap:12px;justify-content:center}
+@media(max-width:480px){
+  .timer-display .time{font-size:28px;letter-spacing:2px}
+  .btn{font-size:11px;padding:12px 16px}
+  .eff-btn{font-size:10px;padding:10px 14px}
+  .stat-value{font-size:16px}
+  .modal{padding:20px}
+}
+</style>
+</head>
+<body>
+<div class="sky-bg">
+  <div class="cloud cloud-1"></div>
+  <div class="cloud cloud-2"></div>
+  <div class="cloud cloud-3"></div>
+  <div class="hill hill-1"></div>
+  <div class="hill hill-2"></div>  <div class="hill hill-3"></div>
+</div>
+<div class="star" style="top:5%;left:15%;--ts:4s;--td:0s"></div>
+<div class="star" style="top:12%;left:35%;--ts:3s;--td:-1s"></div>
+<div class="star" style="top:3%;left:55%;--ts:5s;--td:-2s"></div>
+<div class="star" style="top:9%;left:75%;--ts:3.5s;--td:-0.5s"></div>
+<div class="star" style="top:15%;left:90%;--ts:4.5s;--td:-3s"></div>
+<div class="star" style="top:6%;left:25%;--ts:2.8s;--td:-2.5s"></div>
+<div class="star" style="top:18%;left:65%;--ts:3.2s;--td:-1.5s"></div>
+<div class="level-stage" aria-hidden="true">
+  <div class="level-track">
+    <div class="pixel-block question block-a"></div>
+    <div class="pixel-block block-b"></div>
+    <div class="pixel-block question block-c"></div>
+    <div class="pixel-block block-d"></div>
+    <div class="pixel-block block-e"></div>
+    <div class="pixel-block question block-f"></div>
+    <div class="mini-enemy"></div>
+    <div class="claude-runner"></div>
+  </div>
+</div>
+<div class="ground"></div>
+<button class="sound-toggle" id="soundToggle" title="音效开/关">🔊</button>
+<div class="container">
+  <div id="overview"></div>
+  <div class="timer-display">
+    <div class="time" id="timerDisplay">00:00:00</div>
+    <div class="timer-label" id="timerLabel">
+      <span class="status-dot idle" id="statusDot"></span>
+      准备开始
+    </div>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-start" id="btnStart">▶ 开始</button>
+    <button class="btn btn-pause" id="btnPause" style="display:none">⏸ 暂停</button>
+    <button class="btn btn-stop" id="btnStop" style="display:none">⏹ 停止</button>
+  </div>
+  <div class="history-section brick-card">
+    <div class="history-header">
+      <h3>📋 历史记录</h3>
+      <button class="btn btn-export" id="btnExport">📊 导出 Excel</button>
+    </div>
+    <div class="record-list" id="recordList">
+      <div class="history-empty">暂无记录，开始计时吧！</div>
+    </div>
+  </div>
+</div>
+<div class="modal-overlay hidden" id="reviewModal">
+  <div class="modal" id="reviewPanel">
+    <h3>⭐ 评价这段时间</h3>
+    <div class="eff-btns">
+      <button class="eff-btn" data-eff="25">25%</button>
+      <button class="eff-btn active" data-eff="50">50%</button>
+      <button class="eff-btn" data-eff="75">75%</button>
+      <button class="eff-btn" data-eff="100">100%</button>
+    </div>
+    <div class="eff-slider-row">
+      <span style="font-size:11px;color:#fff">效率</span>
+      <input type="range" id="effSlider" min="0" max="100" value="50" step="1">
+      <span class="eff-slider-val" id="effSliderVal">50%</span>
+    </div>
+    <div style="margin-top:12px">
+      <div style="font-size:10px;color:rgba(255,255,255,.7);text-align:center;margin-bottom:8px">🏷 标签（可选）</div>
+      <div class="tag-btns" id="tagQuickBtns"></div>
+      <input class="pipe-input" id="tagInput" placeholder="输入新标签...">
+    </div>
+    <div class="preview-text" id="reviewPreview"></div>
+    <div class="btn-row" style="margin-top:16px">
+      <button class="btn btn-confirm" id="btnConfirm">✅ 确认</button>
+      <button class="btn btn-cancel" id="btnCancel">🗑 放弃</button>
+    </div>
+  </div>
+</div>
+<div class="modal-overlay hidden" id="editModal">
+  <div class="modal">
+    <h3>✏️ 编辑记录</h3>
+    <div class="eff-btns" id="editEffBtns">
+      <button class="eff-btn" data-eff="25">25%</button>
+      <button class="eff-btn" data-eff="50">50%</button>
+      <button class="eff-btn" data-eff="75">75%</button>
+      <button class="eff-btn" data-eff="100">100%</button>
+    </div>
+    <div class="eff-slider-row">
+      <span style="font-size:11px;color:#fff">效率</span>
+      <input type="range" id="editEffSlider" min="0" max="100" value="50" step="1">
+      <span class="eff-slider-val" id="editEffSliderVal">50%</span>
+    </div>
+    <input class="pipe-input" id="editTagInput" placeholder="输入标签..." style="margin-top:8px">
+    <div class="preview-text" id="editPreview"></div>
+    <div class="btn-row" style="margin-top:16px">
+      <button class="btn btn-confirm" id="btnEditSave">✅ 保存</button>
+      <button class="btn btn-cancel" id="btnEditCancel">🗑 取消</button>
+    </div>
+  </div>
+</div>
+<div class="modal-overlay hidden" id="deleteModal">
+  <div class="modal">
+    <h3>⚠️ 确认删除</h3>
+    <p style="font-size:10px;text-align:center;color:#fff;margin-bottom:14px">此操作不可撤销！</p>
+    <div class="confirm-btns">
+      <button class="btn btn-cancel" id="btnDeleteConfirm">🗑 确认删除</button>
+      <button class="btn btn-confirm" id="btnDeleteCancel">✅ 取消</button>
+    </div>
+  </div>
+</div>
+<script>
+const LS_RECORDS='efficiency-records';
+const LS_TIMER_STATE='timer-state';
+const LS_MUTED='muted';
+const LS_LAST_TAG='last-tag';
+const $timerDisplay=document.getElementById('timerDisplay');
+const $timerLabel=document.getElementById('timerLabel');
+const $statusDot=document.getElementById('statusDot');
+const $btnStart=document.getElementById('btnStart');
+const $btnPause=document.getElementById('btnPause');
+const $btnStop=document.getElementById('btnStop');
+const $overview=document.getElementById('overview');
+const $recordList=document.getElementById('recordList');
+const $btnExport=document.getElementById('btnExport');
+const $soundToggle=document.getElementById('soundToggle');
+const $reviewModal=document.getElementById('reviewModal');
+const $effSlider=document.getElementById('effSlider');
+const $effSliderVal=document.getElementById('effSliderVal');
+const $tagInput=document.getElementById('tagInput');
+const $tagQuickBtns=document.getElementById('tagQuickBtns');
+const $reviewPreview=document.getElementById('reviewPreview');
+const $btnConfirm=document.getElementById('btnConfirm');
+const $btnCancel=document.getElementById('btnCancel');
+const $editModal=document.getElementById('editModal');
+const $editEffSlider=document.getElementById('editEffSlider');
+const $editEffSliderVal=document.getElementById('editEffSliderVal');
+const $editTagInput=document.getElementById('editTagInput');
+const $editPreview=document.getElementById('editPreview');
+const $btnEditSave=document.getElementById('btnEditSave');
+const $btnEditCancel=document.getElementById('btnEditCancel');
+const $deleteModal=document.getElementById('deleteModal');
+const $btnDeleteConfirm=document.getElementById('btnDeleteConfirm');
+const $btnDeleteCancel=document.getElementById('btnDeleteCancel');
+let appState='idle';
+let timerStartTime=null;
+let timerPausedAt=null;
+let timerAccumulatedPauseMs=0;
+let timerInterval=null;
+let pendingRawDuration=0;
+let muted=false;
+let editingRecordId=null;
+let deletingRecordId=null;
+function loadRecords(){try{return JSON.parse(localStorage.getItem(LS_RECORDS)||'[]')}catch(e){return[]}}
+function saveRecords(r){localStorage.setItem(LS_RECORDS,JSON.stringify(r))}
+function loadTimerState(){try{return JSON.parse(localStorage.getItem(LS_TIMER_STATE))}catch(e){return null}}
+function saveTimerState(s){if(s)localStorage.setItem(LS_TIMER_STATE,JSON.stringify(s));else localStorage.removeItem(LS_TIMER_STATE)}
+function loadMuted(){return localStorage.getItem(LS_MUTED)==='true'}
+function saveMuted(v){localStorage.setItem(LS_MUTED,v?'true':'false')}
+function loadLastTag(){return localStorage.getItem(LS_LAST_TAG)||''}
+function saveLastTag(t){if(t)localStorage.setItem(LS_LAST_TAG,t);else localStorage.removeItem(LS_LAST_TAG)}
+function formatDuration(s){if(s<0)s=0;const h=Math.floor(s/3600);const m=Math.floor((s%3600)/60);const sec=Math.floor(s%60);return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0')}
+function formatDurationHuman(s){if(s<60)return Math.floor(s)+'s';const h=Math.floor(s/3600);const m=Math.floor((s%3600)/60);const sec=Math.floor(s%60);let p=[];if(h>0)p.push(h+'h');if(m>0)p.push(m+'m');if(sec>0&&h===0)p.push(sec+'s');return p.join(' ')||'0s'}
+function todayStr(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function getElapsedSeconds(){if(!timerStartTime)return 0;const n=new Date();let e=n-timerStartTime-timerAccumulatedPauseMs;if(timerPausedAt)e-=n-timerPausedAt;return Math.max(0,Math.floor(e/1000))}
+function formatTimeLocal(s){const d=new Date(s);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')}
+let audioCtx=null;
+function getAudioCtx(){if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();return audioCtx}
+function playJump(){if(muted)return;try{const c=getAudioCtx();const o=c.createOscillator();const g=c.createGain();o.type='square';o.frequency.setValueAtTime(300,c.currentTime);o.frequency.linearRampToValueAtTime(900,c.currentTime+.12);g.gain.setValueAtTime(.12,c.currentTime);g.gain.exponentialRampToValueAtTime(.001,c.currentTime+.15);o.connect(g);g.connect(c.destination);o.start(c.currentTime);o.stop(c.currentTime+.15)}catch(e){}}
+function playCoin(){if(muted)return;try{const c=getAudioCtx();[988,1319].forEach((f,i)=>{const o=c.createOscillator();const g=c.createGain();o.type='square';o.frequency.value=f;g.gain.setValueAtTime(.1,c.currentTime+i*.08);g.gain.exponentialRampToValueAtTime(.001,c.currentTime+i*.08+.1);o.connect(g);g.connect(c.destination);o.start(c.currentTime+i*.08);o.stop(c.currentTime+i*.08+.1)})}catch(e){}}
+function playStomp(){if(muted)return;try{const c=getAudioCtx();const o=c.createOscillator();const g=c.createGain();o.type='square';o.frequency.setValueAtTime(400,c.currentTime);o.frequency.linearRampToValueAtTime(80,c.currentTime+.2);g.gain.setValueAtTime(.12,c.currentTime);g.gain.exponentialRampToValueAtTime(.001,c.currentTime+.25);o.connect(g);g.connect(c.destination);o.start(c.currentTime);o.stop(c.currentTime+.25)}catch(e){}}
+function playPowerUp(){if(muted)return;try{const c=getAudioCtx();[523,659,784,1047].forEach((f,i)=>{const o=c.createOscillator();const g=c.createGain();o.type='square';o.frequency.value=f;g.gain.setValueAtTime(.08,c.currentTime+i*.1);g.gain.exponentialRampToValueAtTime(.001,c.currentTime+i*.1+.12);o.connect(g);g.connect(c.destination);o.start(c.currentTime+i*.1);o.stop(c.currentTime+i*.1+.12)})}catch(e){}}
+function playOneUp(){if(muted)return;try{const c=getAudioCtx();[523,659,784,1047,1319,1568].forEach((f,i)=>{const o=c.createOscillator();const g=c.createGain();o.type='square';o.frequency.value=f;g.gain.setValueAtTime(.08,c.currentTime+i*.06);g.gain.exponentialRampToValueAtTime(.001,c.currentTime+i*.06+.08);o.connect(g);g.connect(c.destination);o.start(c.currentTime+i*.06);o.stop(c.currentTime+i*.06+.08)})}catch(e){}}
+function playPipe(){if(muted)return;try{const c=getAudioCtx();const o=c.createOscillator();const g=c.createGain();o.type='triangle';o.frequency.setValueAtTime(200,c.currentTime);o.frequency.linearRampToValueAtTime(100,c.currentTime+.25);g.gain.setValueAtTime(.1,c.currentTime);g.gain.exponentialRampToValueAtTime(.001,c.currentTime+.3);o.connect(g);g.connect(c.destination);o.start(c.currentTime);o.stop(c.currentTime+.3)}catch(e){}}
+function playHurt(){if(muted)return;try{const c=getAudioCtx();const o=c.createOscillator();const g=c.createGain();o.type='square';o.frequency.setValueAtTime(600,c.currentTime);o.frequency.linearRampToValueAtTime(100,c.currentTime+.15);g.gain.setValueAtTime(.1,c.currentTime);g.gain.exponentialRampToValueAtTime(.001,c.currentTime+.2);o.connect(g);g.connect(c.destination);o.start(c.currentTime);o.stop(c.currentTime+.2)}catch(e){}}
+function shakeBtn(el){el.classList.add('shake');setTimeout(()=>el.classList.remove('shake'),300)}
+function updateTimerDisplay(){$timerDisplay.textContent=formatDuration(getElapsedSeconds())}
+function startTimerInterval(){if(timerInterval)clearInterval(timerInterval);timerInterval=setInterval(updateTimerDisplay,200)}
+function stopTimerInterval(){if(timerInterval){clearInterval(timerInterval);timerInterval=null}}
+function setAppState(s){appState=s;document.body.classList.remove('timer-idle','timer-running','timer-paused');document.body.classList.add('timer-'+s);$btnStart.style.display=s==='idle'?'inline-block':'none';$btnPause.style.display=s==='running'?'inline-block':'none';$btnStop.style.display=(s==='running'||s==='paused')?'inline-block':'none';$statusDot.className='status-dot';if(s==='running'){$statusDot.classList.add('running');$timerLabel.innerHTML='<span class="status-dot running"></span>计时中...'}else if(s==='paused'){$statusDot.classList.add('paused');$timerLabel.innerHTML='<span class="status-dot paused"></span>已暂停'}else{$statusDot.classList.add('idle');$timerLabel.innerHTML='<span class="status-dot idle"></span>准备开始'};$btnPause.textContent=s==='paused'?'▶ 继续':'⏸ 暂停'}
+function startTimer(){if(appState!=='idle')return;timerStartTime=new Date();timerPausedAt=null;timerAccumulatedPauseMs=0;saveTimerState({startTime:timerStartTime.toISOString(),pausedAt:null,accumulatedPauseMs:0});setAppState('running');startTimerInterval();updateTimerDisplay();playJump();shakeBtn($btnStart)}
+function pauseTimer(){if(appState!=='running')return;timerPausedAt=new Date();saveTimerState({startTime:timerStartTime.toISOString(),pausedAt:timerPausedAt.toISOString(),accumulatedPauseMs:timerAccumulatedPauseMs});setAppState('paused');stopTimerInterval();playPipe();shakeBtn($btnPause)}
+function resumeTimer(){if(appState!=='paused')return;const n=new Date();timerAccumulatedPauseMs+=n-timerPausedAt;timerPausedAt=null;saveTimerState({startTime:timerStartTime.toISOString(),pausedAt:null,accumulatedPauseMs:timerAccumulatedPauseMs});setAppState('running');startTimerInterval();updateTimerDisplay();playPipe();shakeBtn($btnPause)}
+function stopTimer(){if(appState!=='running'&&appState!=='paused')return;const e=new Date();if(appState==='paused')timerAccumulatedPauseMs+=e-timerPausedAt;pendingRawDuration=Math.max(0,Math.floor((e-timerStartTime-timerAccumulatedPauseMs)/1000));stopTimerInterval();saveTimerState(null);setAppState('idle');$timerDisplay.textContent=formatDuration(pendingRawDuration);playStomp();shakeBtn($btnStop);openReviewModal()}
+function openReviewModal(){$effSlider.value=50;$effSliderVal.textContent='50%';updateReviewPreview();document.querySelectorAll('#reviewPanel .eff-btn').forEach(b=>b.classList.remove('active'));document.querySelector('#reviewPanel .eff-btn[data-eff="50"]').classList.add('active');const t=loadLastTag();$tagInput.value=t;renderTagQuickBtns($tagQuickBtns,t);$reviewModal.classList.remove('hidden');$tagInput.focus()}
+function closeReviewModal(){$reviewModal.classList.add('hidden');pendingRawDuration=0}
+function updateReviewPreview(){const e=parseInt($effSlider.value);const f=Math.floor(pendingRawDuration*e/100);$reviewPreview.innerHTML='原始时长 <span>'+formatDurationHuman(pendingRawDuration)+'</span> → 有效时长 <span>'+formatDurationHuman(f)+'</span>'}
+function confirmReview(){const e=parseInt($effSlider.value);const t=$tagInput.value.trim();const f=Math.floor(pendingRawDuration*e/100);const r={id:Date.now(),date:todayStr(),startTime:timerStartTime.toISOString(),endTime:new Date().toISOString(),rawDuration:pendingRawDuration,efficiency:e,effectiveDuration:f,tag:t};const recs=loadRecords();recs.unshift(r);saveRecords(recs);saveLastTag(t);closeReviewModal();renderAll();playPowerUp()}
+function cancelReview(){closeReviewModal();playHurt();renderAll()}
+function openEditModal(r){editingRecordId=r.id;$editEffSlider.value=r.efficiency;$editEffSliderVal.textContent=r.efficiency+'%';$editTagInput.value=r.tag||'';updateEditEffBtns(r.efficiency);updateEditPreview(r.rawDuration);$editModal.classList.remove('hidden')}
+function closeEditModal(){$editModal.classList.add('hidden');editingRecordId=null}
+function updateEditEffBtns(e){document.querySelectorAll('#editEffBtns .eff-btn').forEach(b=>{b.classList.toggle('active',parseInt(b.dataset.eff)===e)})}
+function updateEditPreview(raw){const e=parseInt($editEffSlider.value);const f=Math.floor(raw*e/100);$editPreview.innerHTML='原始时长 <span>'+formatDurationHuman(raw)+'</span> → 有效时长 <span>'+formatDurationHuman(f)+'</span>'}
+function saveEdit(){const recs=loadRecords();const i=recs.findIndex(r=>r.id===editingRecordId);if(i===-1){closeEditModal();return}const r=recs[i];r.efficiency=parseInt($editEffSlider.value);r.tag=$editTagInput.value.trim();r.effectiveDuration=Math.floor(r.rawDuration*r.efficiency/100);saveRecords(recs);saveLastTag(r.tag);closeEditModal();renderAll();playCoin()}
+function openDeleteModal(id){deletingRecordId=id;$deleteModal.classList.remove('hidden')}
+function closeDeleteModal(){$deleteModal.classList.add('hidden');deletingRecordId=null}
+function confirmDelete(){if(!deletingRecordId)return;const recs=loadRecords().filter(r=>r.id!==deletingRecordId);saveRecords(recs);closeDeleteModal();renderAll();playHurt()}
+function getTodayRecords(){const t=todayStr();return loadRecords().filter(r=>r.date===t)}
+function getAllTags(){const s=new Set();loadRecords().forEach(r=>{if(r.tag)s.add(r.tag)});return Array.from(s)}
+function renderTagQuickBtns(c,a){const tags=getAllTags();c.innerHTML=tags.map(t=>'<button class="tag-btn'+(t===a?' active':'')+'" data-tag="'+t+'">'+t+'</button>').join('')}
+function renderOverview(){const today=getTodayRecords();if(today.length===0){$overview.innerHTML='<div class="overview-empty"><div class="question-block">?</div><div style="font-size:11px;color:#fff;margin-top:10px">今天还没有记录</div></div>';return}const raw=today.reduce((s,r)=>s+r.rawDuration,0);const eff=today.reduce((s,r)=>s+r.effectiveDuration,0);const pct=raw>0?Math.round(eff/raw*100):0;const tagMap={};today.forEach(r=>{const k=r.tag||'(无标签)';if(!tagMap[k])tagMap[k]=0;tagMap[k]+=r.effectiveDuration});const max=Math.max(...Object.values(tagMap),1);let bars=Object.entries(tagMap).map(([t,v])=>{const p=Math.round(v/max*100);return'<div class="tag-bar-row"><span class="tag-bar-name">'+t+'</span><div class="tag-bar-track"><div class="tag-bar-fill" style="width:'+p+'%"></div></div><span class="tag-bar-time">'+formatDurationHuman(v)+'</span></div>'}).join('');$overview.innerHTML='<div class="brick-card"><div style="font-size:12px;text-align:center;color:#FFB800;margin-bottom:14px;text-shadow:2px 2px 0 #6B3410">⭐ 今日概览</div><div class="overview-stats"><div class="stat-item"><div class="stat-label">学习时长</div><div class="stat-value">'+formatDurationHuman(raw)+'</div></div><div class="stat-item"><div class="stat-label">有效时长</div><div class="stat-value">'+formatDurationHuman(eff)+'</div></div><div class="stat-item"><div class="stat-label">效率</div><div class="stat-value">'+pct+'%</div></div></div>'+(bars?'<div class="tag-bars">'+bars+'</div>':'')+'</div>'}
+function renderHistory(){const recs=loadRecords();if(recs.length===0){$recordList.innerHTML='<div class="history-empty">暂无记录，开始计时吧！</div>';return}$recordList.innerHTML=recs.map(r=>{const st=formatTimeLocal(r.startTime);const et=formatTimeLocal(r.endTime);return'<div class="record-item"><span class="record-time">'+st+' - '+et+'</span>'+(r.tag?'<span class="record-tag">'+r.tag+'</span>':'<span class="record-tag empty">—</span>')+'<span class="record-raw">📝 '+formatDurationHuman(r.rawDuration)+'</span><span class="record-eff">⭐ '+r.efficiency+'% → '+formatDurationHuman(r.effectiveDuration)+'</span><span class="record-actions"><button class="btn-edit" data-edit="'+r.id+'">✏️</button><button class="btn-delete" data-delete="'+r.id+'">🗑</button></span></div>'}).join('')}
+function renderAll(){renderOverview();renderHistory()}
+function exportExcel(){if(typeof XLSX==='undefined'){alert('Excel 库加载中，请稍后再试...');return}const recs=loadRecords();if(recs.length===0){alert('没有记录可导出！');return}const datesSet=new Set();const tagsSet=new Set();recs.forEach(r=>{datesSet.add(r.date);if(r.tag)tagsSet.add(r.tag)});const dates=Array.from(datesSet).sort();const allTags=Array.from(tagsSet).sort();const matrix={};dates.forEach(d=>{matrix[d]={totalRaw:0,totalEff:0,tags:{}}});recs.forEach(r=>{matrix[r.date].totalRaw+=r.rawDuration;matrix[r.date].totalEff+=r.effectiveDuration;const k=r.tag||'(无标签)';if(!matrix[r.date].tags[k])matrix[r.date].tags[k]=0;matrix[r.date].tags[k]+=r.effectiveDuration});const header=['日期','总学习时长','总有效时长','时间利用效率',...allTags];const rows=[header];dates.forEach(d=>{const m=matrix[d];const e=m.totalRaw>0?Math.round(m.totalEff/m.totalRaw*100):0;const row=[d,formatDurationHuman(m.totalRaw),formatDurationHuman(m.totalEff),e+'%'];allTags.forEach(t=>{row.push(m.tags[t]?formatDurationHuman(m.tags[t]):'—')});rows.push(row)});const grandRaw=recs.reduce((s,r)=>s+r.rawDuration,0);const grandEff=recs.reduce((s,r)=>s+r.effectiveDuration,0);const grandPct=grandRaw>0?Math.round(grandEff/grandRaw*100):0;const sRow=['合计',formatDurationHuman(grandRaw),formatDurationHuman(grandEff),grandPct+'%'];allTags.forEach(t=>{const te=recs.filter(r=>(r.tag||'(无标签)')===t).reduce((s,r)=>s+r.effectiveDuration,0);sRow.push(formatDurationHuman(te))});rows.push(sRow);const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=[{wch:12},{wch:14},{wch:14},{wch:12},...allTags.map(()=>({wch:12}))];const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'效率统计');XLSX.writeFile(wb,'效率统计.xlsx');playOneUp();shakeBtn($btnExport)}
+function toggleSound(){muted=!muted;saveMuted(muted);$soundToggle.textContent=muted?'🔇':'🔊'}
+document.addEventListener('keydown',(e)=>{if(e.target.tagName==='INPUT')return;if(e.code==='Space'){e.preventDefault();if(appState==='idle')startTimer();else if(appState==='running')stopTimer();else if(appState==='paused')stopTimer()}if(e.code==='KeyP'){e.preventDefault();if(appState==='running')pauseTimer();else if(appState==='paused')resumeTimer()}if(e.code==='Enter'&&!$reviewModal.classList.contains('hidden')){e.preventDefault();confirmReview()}if(e.code==='Escape'){if(!$reviewModal.classList.contains('hidden')){e.preventDefault();cancelReview()}else if(!$editModal.classList.contains('hidden')){e.preventDefault();closeEditModal()}else if(!$deleteModal.classList.contains('hidden')){e.preventDefault();closeDeleteModal()}}});
+$btnStart.addEventListener('click',startTimer);
+$btnPause.addEventListener('click',()=>{if(appState==='running')pauseTimer();else if(appState==='paused')resumeTimer()});
+$btnStop.addEventListener('click',stopTimer);
+$btnConfirm.addEventListener('click',confirmReview);
+$btnCancel.addEventListener('click',cancelReview);
+$btnExport.addEventListener('click',exportExcel);
+$soundToggle.addEventListener('click',toggleSound);
+$btnEditSave.addEventListener('click',saveEdit);
+$btnEditCancel.addEventListener('click',closeEditModal);
+$btnDeleteConfirm.addEventListener('click',confirmDelete);
+$btnDeleteCancel.addEventListener('click',closeDeleteModal);
+$effSlider.addEventListener('input',()=>{const v=parseInt($effSlider.value);$effSliderVal.textContent=v+'%';updateReviewPreview();document.querySelectorAll('#reviewPanel .eff-btn').forEach(b=>{b.classList.toggle('active',parseInt(b.dataset.eff)===v)})});
+$editEffSlider.addEventListener('input',()=>{const v=parseInt($editEffSlider.value);$editEffSliderVal.textContent=v+'%';updateEditEffBtns(v);const recs=loadRecords();const r=recs.find(r=>r.id===editingRecordId);if(r)updateEditPreview(r.rawDuration)});
+document.querySelectorAll('#reviewPanel .eff-btn').forEach(btn=>{btn.addEventListener('click',()=>{const v=btn.dataset.eff;$effSlider.value=v;$effSliderVal.textContent=v+'%';updateReviewPreview();document.querySelectorAll('#reviewPanel .eff-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');playCoin();shakeBtn(btn)})});
+document.querySelectorAll('#editEffBtns .eff-btn').forEach(btn=>{btn.addEventListener('click',()=>{const v=btn.dataset.eff;$editEffSlider.value=v;$editEffSliderVal.textContent=v+'%';updateEditEffBtns(parseInt(v));const recs=loadRecords();const r=recs.find(r=>r.id===editingRecordId);if(r)updateEditPreview(r.rawDuration);playCoin();shakeBtn(btn)})});
+$tagQuickBtns.addEventListener('click',(e)=>{if(e.target.classList.contains('tag-btn')){$tagInput.value=e.target.dataset.tag;renderTagQuickBtns($tagQuickBtns,e.target.dataset.tag);playCoin()}});
+$recordList.addEventListener('click',(e)=>{const eb=e.target.closest('[data-edit]');const db=e.target.closest('[data-delete]');if(eb){const id=parseInt(eb.dataset.edit);const r=loadRecords().find(r=>r.id===id);if(r)openEditModal(r)}if(db){openDeleteModal(parseInt(db.dataset.delete))}});
+[$reviewModal,$editModal,$deleteModal].forEach(m=>{m.addEventListener('click',(e)=>{if(e.target===m){if(m===$reviewModal)cancelReview();else if(m===$editModal)closeEditModal();else if(m===$deleteModal)closeDeleteModal()}})});
+window.addEventListener('beforeunload',(e)=>{if(appState==='running'||appState==='paused'){e.preventDefault();e.returnValue='计时正在进行中，确定要离开吗？';return e.returnValue}});
+(function init(){muted=loadMuted();$soundToggle.textContent=muted?'🔇':'🔊';const s=loadTimerState();if(s&&s.startTime){timerStartTime=new Date(s.startTime);timerAccumulatedPauseMs=s.accumulatedPauseMs||0;if(s.pausedAt){timerPausedAt=new Date(s.pausedAt);$timerDisplay.textContent=formatDuration(getElapsedSeconds());setAppState('paused')}else{timerPausedAt=null;setAppState('running');startTimerInterval();updateTimerDisplay()}}else{setAppState('idle')}renderAll()})();
+</script>
+</body>
+</html>

@@ -76,11 +76,16 @@ body{
   50%{transform:translateX(-50%) scaleY(1.03)}
 }
 .hill-1{animation:hill-breathe-1 8s ease-in-out infinite;}
+.hill-group{position:absolute;left:0;right:0;bottom:0;height:160px;z-index:0}
 @keyframes hill-breathe-1{
   0%,100%{transform:scaleY(1)}
   50%{transform:scaleY(1.03)}
 }
 .ground{
+@keyframes hill-scroll{
+  0%{transform:translateX(0)}
+  100%{transform:translateX(-12%)}
+}
   position:fixed;bottom:0;left:0;right:0;height:32px;
   background:linear-gradient(0deg,#8B4513 0%,#C84C0C 40%,#00A800 40%,#4CAF50 100%);
   z-index:0;
@@ -237,12 +242,26 @@ body.timer-running .level-track{animation-duration:10s}
 body.timer-running .claude-runner{animation-duration:2.65s}
 body.timer-running .claude-runner::before{animation-duration:2.65s}
 body.timer-running .pixel-block{animation-duration:2.65s}
+body.timer-running .cloud-1{animation-duration:8s}
+body.timer-running .cloud-2{animation-duration:7s}
+body.timer-running .cloud-3{animation-duration:10s}
+body.timer-running .hill-1{animation-duration:3.5s}
+body.timer-running .hill-2{animation-duration:3.5s}
+body.timer-running .hill-3{animation-duration:3.5s}
+body.timer-running .hill-group{animation:hill-scroll 10s linear infinite}
 body.timer-paused .level-track,
 body.timer-paused .claude-runner,
 body.timer-paused .claude-runner::before,
 body.timer-paused .claude-runner::after,
 body.timer-paused .pixel-block,
-body.timer-paused .mini-enemy{animation-play-state:paused}
+body.timer-paused .mini-enemy,
+body.timer-paused .cloud-1,
+body.timer-paused .cloud-2,
+body.timer-paused .cloud-3,
+body.timer-paused .hill-1,
+body.timer-paused .hill-2,
+body.timer-paused .hill-3,
+body.timer-paused .hill-group{animation-play-state:paused}
 body.timer-idle .claude-runner{animation-duration:3.8s}
 body.timer-idle .claude-runner::before{animation-duration:3.8s}
 body.timer-idle .pixel-block{animation-duration:3.8s}
@@ -337,6 +356,11 @@ body.timer-idle .pixel-block{animation-duration:3.8s}
 }
 .sound-toggle:hover{transform:scale(1.1)}
 .sound-toggle:active{transform:scale(.95)}
+.auto-pause-toggle{position:fixed;top:68px;right:16px;z-index:100;width:44px;height:44px;border:3px solid #8B4513;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;transition:transform .1s;image-rendering:pixelated}
+.auto-pause-toggle:hover{transform:scale(1.1)}
+.auto-pause-toggle:active{transform:scale(.95)}
+.auto-pause-toggle.on{background:#00A800;border-color:#006400;color:#fff}
+.auto-pause-toggle.off{background:#AAA;border-color:#666;color:#666}
 .brick-card{
   background:#C84C0C;
   border:4px solid #8B4513;
@@ -575,6 +599,8 @@ body.timer-idle .pixel-block{animation-duration:3.8s}
   .stat-value{font-size:16px}
   .modal{padding:20px}
 }
+.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#C84C0C;border:3px solid #8B4513;color:#fff;padding:12px 24px;font-size:12px;z-index:200;box-shadow:0 6px 0 #6B3410;transition:opacity .3s,transform .3s;opacity:1;max-width:90vw;text-align:center}
+.toast.hidden{opacity:0;transform:translateX(-50%) translateY(-20px);pointer-events:none}
 </style>
 </head>
 <body class="timer-idle">
@@ -583,7 +609,11 @@ body.timer-idle .pixel-block{animation-duration:3.8s}
   <div class="cloud cloud-2"></div>
   <div class="cloud cloud-3"></div>
   <div class="hill hill-1"></div>
-  <div class="hill hill-2"></div>  <div class="hill hill-3"></div>
+  <div class="hill-group">
+    <div class="hill hill-1"></div>
+    <div class="hill hill-2"></div>
+    <div class="hill hill-3"></div>
+  </div>
 </div>
 <div class="star" style="top:5%;left:15%;--ts:4s;--td:0s"></div>
 <div class="star" style="top:12%;left:35%;--ts:3s;--td:-1s"></div>
@@ -606,6 +636,7 @@ body.timer-idle .pixel-block{animation-duration:3.8s}
 </div>
 <div class="ground"></div>
 <button class="sound-toggle" id="soundToggle" title="音效开/关">🔊</button>
+<button class="auto-pause-toggle off" id="autoPauseToggle" title="自动暂停：关">▶</button>
 <div class="container">
   <div id="overview"></div>
   <div class="timer-display">
@@ -732,6 +763,16 @@ let editingRecordId=null;
 let deletingRecordId=null;
 function loadRecords(){try{return JSON.parse(localStorage.getItem(LS_RECORDS)||'[]')}catch(e){return[]}}
 function saveRecords(r){localStorage.setItem(LS_RECORDS,JSON.stringify(r))}
+let autoPauseId=null;let longCheckId=null;let longWarned=false;
+let autoPauseEnabled=false;
+function loadAutoPauseSetting(){return localStorage.getItem("autoPauseEnabled")==="true"}
+function saveAutoPauseSetting(v){localStorage.setItem("autoPauseEnabled",v?"true":"false")}
+function updateAutoPauseToggle(){const b=document.getElementById("autoPauseToggle");b.textContent=autoPauseEnabled?"⏸":"▶";b.className="auto-pause-toggle "+(autoPauseEnabled?"on":"off");b.title=autoPauseEnabled?"自动暂停：开（离开5分钟后自动暂停）":"自动暂停：关"}
+const AUTO_PAUSE_DELAY=5*60*1000;const LONG_DURATION=2*60*60;
+function showToast(msg){document.getElementById("toast").textContent=msg;document.getElementById("toast").classList.remove("hidden");setTimeout(()=>{document.getElementById("toast").classList.add("hidden")},5000)}
+function clearAutoTimers(){if(autoPauseId){clearTimeout(autoPauseId);autoPauseId=null}if(longCheckId){clearInterval(longCheckId);longCheckId=null}}
+function setupAutoTimers(){clearAutoTimers();longWarned=false;longCheckId=setInterval(()=>{if(appState!=="running")return;const e=getElapsedSeconds();if(e>=LONG_DURATION&&!longWarned){longWarned=true;playPipe();showToast("⏰ 已经连续计时 "+formatDurationHuman(e)+"，还在学习吗？点击暂停或停止来结束")}},30*1000)}
+document.addEventListener("visibilitychange",()=>{if(!autoPauseEnabled||appState!=="running")return;if(document.hidden){autoPauseId=setTimeout(()=>{if(appState==="running"){pauseTimer();showToast("⏸ 检测到你离开页面超过 3 分钟，计时已自动暂停")}},AUTO_PAUSE_DELAY)}else{if(autoPauseId){clearTimeout(autoPauseId);autoPauseId=null}}})
 function loadTimerState(){try{return JSON.parse(localStorage.getItem(LS_TIMER_STATE))}catch(e){return null}}
 function restartSceneAnimations(){const r=document.querySelector(".claude-runner");const b=document.querySelectorAll(".pixel-block");const t=document.querySelector(".level-track");const e=document.querySelector(".mini-enemy");if(r)r.style.animation="none";b.forEach(el=>{el.style.animation="none"});if(t)t.style.animation="none";if(e)e.style.animation="none";void document.body.offsetHeight;if(r)r.style.animation="";b.forEach(el=>{el.style.animation=""});if(t)t.style.animation="";if(e)e.style.animation=""}
 function saveTimerState(s){if(s)localStorage.setItem(LS_TIMER_STATE,JSON.stringify(s));else localStorage.removeItem(LS_TIMER_STATE)}
@@ -758,10 +799,10 @@ function updateTimerDisplay(){$timerDisplay.textContent=formatDuration(getElapse
 function startTimerInterval(){if(timerInterval)clearInterval(timerInterval);timerInterval=setInterval(updateTimerDisplay,200)}
 function stopTimerInterval(){if(timerInterval){clearInterval(timerInterval);timerInterval=null}}
 function setAppState(s){appState=s;document.body.classList.remove('timer-idle','timer-running','timer-paused');document.body.classList.add('timer-'+s);$btnStart.style.display=s==='idle'?'inline-block':'none';$btnPause.style.display=s==='running'?'inline-block':'none';$btnStop.style.display=(s==='running'||s==='paused')?'inline-block':'none';$statusDot.className='status-dot';if(s==='running'){$statusDot.classList.add('running');$timerLabel.innerHTML='<span class="status-dot running"></span>计时中...'}else if(s==='paused'){$statusDot.classList.add('paused');$timerLabel.innerHTML='<span class="status-dot paused"></span>已暂停'}else{$statusDot.classList.add('idle');$timerLabel.innerHTML='<span class="status-dot idle"></span>准备开始'};$btnPause.textContent=s==='paused'?'▶ 继续':'⏸ 暂停'}
-function startTimer(){if(appState!=='idle')return;timerStartTime=new Date();timerPausedAt=null;timerAccumulatedPauseMs=0;saveTimerState({startTime:timerStartTime.toISOString(),pausedAt:null,accumulatedPauseMs:0});setAppState('running');startTimerInterval();updateTimerDisplay();playJump();shakeBtn($btnStart)}
-function pauseTimer(){if(appState!=='running')return;timerPausedAt=new Date();saveTimerState({startTime:timerStartTime.toISOString(),pausedAt:timerPausedAt.toISOString(),accumulatedPauseMs:timerAccumulatedPauseMs});setAppState('paused');stopTimerInterval();playPipe();shakeBtn($btnPause)}
-function resumeTimer(){if(appState!=='paused')return;const n=new Date();timerAccumulatedPauseMs+=n-timerPausedAt;timerPausedAt=null;saveTimerState({startTime:timerStartTime.toISOString(),pausedAt:null,accumulatedPauseMs:timerAccumulatedPauseMs});setAppState('running');startTimerInterval();updateTimerDisplay();playPipe();shakeBtn($btnPause)}
-function stopTimer(){if(appState!=='running'&&appState!=='paused')return;const e=new Date();if(appState==='paused')timerAccumulatedPauseMs+=e-timerPausedAt;pendingRawDuration=Math.max(0,Math.floor((e-timerStartTime-timerAccumulatedPauseMs)/1000));stopTimerInterval();saveTimerState(null);setAppState('idle');$timerDisplay.textContent=formatDuration(pendingRawDuration);playStomp();shakeBtn($btnStop);openReviewModal()}
+function startTimer(){if(appState!=='idle')return;timerStartTime=new Date();timerPausedAt=null;timerAccumulatedPauseMs=0;saveTimerState({startTime:timerStartTime.toISOString(),pausedAt:null,accumulatedPauseMs:0});setAppState('running');setupAutoTimers();startTimerInterval();updateTimerDisplay();playJump();shakeBtn($btnStart)}
+function pauseTimer(){if(appState!=='running')return;clearAutoTimers();timerPausedAt=new Date();saveTimerState({startTime:timerStartTime.toISOString(),pausedAt:timerPausedAt.toISOString(),accumulatedPauseMs:timerAccumulatedPauseMs});setAppState('paused');stopTimerInterval();playPipe();shakeBtn($btnPause)}
+function resumeTimer(){if(appState!=='paused')return;const n=new Date();timerAccumulatedPauseMs+=n-timerPausedAt;timerPausedAt=null;saveTimerState({startTime:timerStartTime.toISOString(),pausedAt:null,accumulatedPauseMs:timerAccumulatedPauseMs});setAppState('running');setupAutoTimers();startTimerInterval();updateTimerDisplay();playPipe();shakeBtn($btnPause)}
+function stopTimer(){if(appState!=='running'&&appState!=='paused')return;clearAutoTimers();const e=new Date();if(appState==='paused')timerAccumulatedPauseMs+=e-timerPausedAt;pendingRawDuration=Math.max(0,Math.floor((e-timerStartTime-timerAccumulatedPauseMs)/1000));stopTimerInterval();saveTimerState(null);setAppState('idle');$timerDisplay.textContent=formatDuration(pendingRawDuration);playStomp();shakeBtn($btnStop);openReviewModal()}
 function openReviewModal(){$effSlider.value=50;$effSliderVal.textContent='50%';updateReviewPreview();document.querySelectorAll('#reviewPanel .eff-btn').forEach(b=>b.classList.remove('active'));document.querySelector('#reviewPanel .eff-btn[data-eff="50"]').classList.add('active');const t=loadLastTag();$tagInput.value=t;renderTagQuickBtns($tagQuickBtns,t);$reviewModal.classList.remove('hidden');$tagInput.focus()}
 function closeReviewModal(){$reviewModal.classList.add('hidden');pendingRawDuration=0}
 function updateReviewPreview(){const e=parseInt($effSlider.value);const f=Math.floor(pendingRawDuration*e/100);$reviewPreview.innerHTML='原始时长 <span>'+formatDurationHuman(pendingRawDuration)+'</span> → 有效时长 <span>'+formatDurationHuman(f)+'</span>'}
@@ -791,6 +832,7 @@ $btnConfirm.addEventListener('click',confirmReview);
 $btnCancel.addEventListener('click',cancelReview);
 $btnExport.addEventListener('click',exportExcel);
 $soundToggle.addEventListener('click',toggleSound);
+document.getElementById('autoPauseToggle').addEventListener('click',()=>{autoPauseEnabled=!autoPauseEnabled;saveAutoPauseSetting(autoPauseEnabled);updateAutoPauseToggle();if(!autoPauseEnabled&&autoPauseId){clearTimeout(autoPauseId);autoPauseId=null}playCoin()});
 $btnEditSave.addEventListener('click',saveEdit);
 $btnEditCancel.addEventListener('click',closeEditModal);
 $btnDeleteConfirm.addEventListener('click',confirmDelete);
@@ -803,7 +845,8 @@ $tagQuickBtns.addEventListener('click',(e)=>{if(e.target.classList.contains('tag
 $recordList.addEventListener('click',(e)=>{const eb=e.target.closest('[data-edit]');const db=e.target.closest('[data-delete]');if(eb){const id=parseInt(eb.dataset.edit);const r=loadRecords().find(r=>r.id===id);if(r)openEditModal(r)}if(db){openDeleteModal(parseInt(db.dataset.delete))}});
 [$reviewModal,$editModal,$deleteModal].forEach(m=>{m.addEventListener('click',(e)=>{if(e.target===m){if(m===$reviewModal)cancelReview();else if(m===$editModal)closeEditModal();else if(m===$deleteModal)closeDeleteModal()}})});
 window.addEventListener('beforeunload',(e)=>{if(appState==='running'||appState==='paused'){e.preventDefault();e.returnValue='计时正在进行中，确定要离开吗？';return e.returnValue}});
-(function init(){muted=loadMuted();$soundToggle.textContent=muted?'🔇':'🔊';const s=loadTimerState();if(s&&s.startTime){timerStartTime=new Date(s.startTime);timerAccumulatedPauseMs=s.accumulatedPauseMs||0;if(s.pausedAt){timerPausedAt=new Date(s.pausedAt);$timerDisplay.textContent=formatDuration(getElapsedSeconds());setAppState('paused')}else{timerPausedAt=null;setAppState('running');startTimerInterval();updateTimerDisplay()}}else{setAppState('idle')}renderAll()})();
+(function init(){muted=loadMuted();autoPauseEnabled=loadAutoPauseSetting();updateAutoPauseToggle();$soundToggle.textContent=muted?'🔇':'🔊';const s=loadTimerState();if(s&&s.startTime){timerStartTime=new Date(s.startTime);timerAccumulatedPauseMs=s.accumulatedPauseMs||0;if(s.pausedAt){timerPausedAt=new Date(s.pausedAt);$timerDisplay.textContent=formatDuration(getElapsedSeconds());setAppState('paused')}else{timerPausedAt=null;setAppState('running');startTimerInterval();updateTimerDisplay()}}else{setAppState('idle')}renderAll()})();
 </script>
+<div id="toast" class="toast hidden"></div>
 </body>
 </html>
